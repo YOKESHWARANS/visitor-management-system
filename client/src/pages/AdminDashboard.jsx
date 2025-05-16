@@ -12,7 +12,7 @@ const AdminDashboard = ({ handleLogout }) => {
   const fetchVisitors = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('adminToken');
+      const token = sessionStorage.getItem('adminToken');
 
       if (!token) {
         toast.error('Unauthorized access. Please login.');

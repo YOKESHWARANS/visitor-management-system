@@ -25,7 +25,7 @@ const AdminLogin = ({ setIsAuthenticated }) => {
 
     
     if (username === 'admin' && password === '123') {
-      localStorage.setItem('adminToken', 'dummy-token'); // Save token for session
+      sessionStorage.setItem('adminToken', 'dummy-token'); // Save token for session
       setIsAuthenticated(true);
       toast.success('Login successful!');
       navigate('/admin-dashboard');

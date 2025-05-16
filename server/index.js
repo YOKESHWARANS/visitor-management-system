@@ -11,54 +11,89 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Global connection pool
+let pool;
+
 // Function to create the database if it doesn't exist
 async function createDatabaseIfNotExists() {
+  let connection;
   try {
-    const connection = await mysql.createConnection({
+    // First connect without database specified
+    console.log("Attempting to connect to MySQL...");
+    connection = await mysql.createConnection({
       host: process.env.DB_HOST || "localhost",
       user: process.env.DB_USER || "root",
       password: process.env.DB_PASSWORD || "Karthikyokesh@1",
+      // No database specified here
     });
-
+    
+    console.log("Connected to MySQL server successfully");
     await connection.query("CREATE DATABASE IF NOT EXISTS visitor_db");
     console.log("Database 'visitor_db' ensured.");
-    await connection.end();
   } catch (error) {
-    console.error("Error creating database:", error);
-    process.exit(1);
+    console.error("Error connecting to MySQL server:", error);
+    throw error; // Re-throw to handle at higher level
+  } finally {
+    if (connection) {
+      try {
+        await connection.end();
+        console.log("Initial connection closed");
+      } catch (err) {
+        console.error("Error closing initial connection:", err);
+      }
+    }
   }
 }
 
-// Create database connection pool (after DB is ensured)
-let pool;
+// Create database connection pool
 async function createPool() {
-  pool = mysql.createPool({
-    host: process.env.DB_HOST || "localhost",
-    user: process.env.DB_USER || "root",
-    password: process.env.DB_PASSWORD || "Karthikyokesh@1",
-    database: process.env.DB_NAME || "visitor_db",
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
-  });
+  try {
+    console.log("Creating connection pool...");
+    pool = mysql.createPool({
+      host: process.env.DB_HOST || "localhost",
+      user: process.env.DB_USER || "root",
+      password: process.env.DB_PASSWORD || "Karthikyokesh@1",
+      database: process.env.DB_NAME || "visitor_db",
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0,
+      // Add connection timeout
+      connectTimeout: 10000, // 10 seconds
+    });
+    
+    // Test the pool with a ping
+    const conn = await pool.getConnection();
+    await conn.ping();
+    conn.release();
+    console.log("Connection pool created and tested successfully");
+    return true;
+  } catch (error) {
+    console.error("Error creating connection pool:", error);
+    return false;
+  }
 }
 
 // Middleware to check DB connection
 app.use(async (req, res, next) => {
+  if (!pool) {
+    return res.status(500).json({ message: "Database connection not established" });
+  }
+  
   try {
     const connection = await pool.getConnection();
     connection.release();
     next();
   } catch (error) {
-    console.error("Database connection error:", error);
+    console.error("Database connection error in middleware:", error);
     res.status(500).json({ message: "Database connection error" });
   }
 });
 
 // Create the visitors table if it doesn't exist
 async function initializeDB() {
+  let connection;
   try {
-    const connection = await pool.getConnection();
+    connection = await pool.getConnection();
 
     await connection.query(`
       CREATE TABLE IF NOT EXISTS visitors (
@@ -99,12 +134,17 @@ async function initializeDB() {
     }
 
     console.log("Database tables initialized");
-    connection.release();
   } catch (error) {
     console.error("Error initializing database:", error);
+    throw error;
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 }
 
+// API routes remain the same...
 // API: Register a new visitor
 app.post("/api/visitors", async (req, res) => {
   try {
@@ -228,9 +268,33 @@ app.post("/api/visitors/exit", async (req, res) => {
 
 // Start the server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, async () => {
-  await createDatabaseIfNotExists(); // ensure DB exists
-  await createPool(); // create pool using DB
-  await initializeDB(); // ensure table exists
-  console.log(`Server running on port ${PORT}`);
-});
+
+// Improved startup process with better error handling
+async function startServer() {
+  try {
+    // Step 1: Ensure database exists
+    console.log("Step 1: Creating database if needed...");
+    await createDatabaseIfNotExists();
+    
+    // Step 2: Create connection pool
+    console.log("Step 2: Creating connection pool...");
+    const poolCreated = await createPool();
+    if (!poolCreated) {
+      throw new Error("Failed to create connection pool");
+    }
+    
+    // Step 3: Initialize database tables
+    console.log("Step 3: Initializing database tables...");
+    await initializeDB();
+    
+    // Step 4: Start the server
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error("Failed to start server:", error);
+    process.exit(1);
+  }
+}
+
+startServer();

@@ -13,7 +13,7 @@ const VisitorExit = () => {
   })
 
   useEffect(() => {
-    const visitorInfo = JSON.parse(localStorage.getItem('visitorInfo') || '{}')
+    const visitorInfo = JSON.parse(sessionStorage.getItem('visitorInfo') || '{}')
     if (visitorInfo.mobile && visitorInfo.entryCode) {
       setFormData({
         mobileNumber: visitorInfo.mobile,
@@ -42,7 +42,7 @@ const VisitorExit = () => {
       setLoading(true)
       await axios.post('http://localhost:5000/api/visitors/exit', formData)
       
-      localStorage.removeItem('visitorInfo')
+      sessionStorage.removeItem('visitorInfo')
       
       setSuccess(true)
       toast.success('Exit registered successfully!')

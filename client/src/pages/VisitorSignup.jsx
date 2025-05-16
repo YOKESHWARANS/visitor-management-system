@@ -52,7 +52,7 @@ const VisitorSignup = () => {
       setSuccess(true)
       toast.success('Visitor entry registered successfully!')
       
-      localStorage.setItem('visitorInfo', JSON.stringify({
+      sessionStorage.setItem('visitorInfo', JSON.stringify({
         name: formData.visitorName,
         mobile: formData.mobileNumber,
         entryCode: response.data.entryCode
